@@ -29,3 +29,6 @@ RG2 - Gripper
 ```bash
 pip install pymodbus==2.4.0
 ```
+
+### Manipulator (Universal Robot `UR5e`)
+- Parsing an MJCF file and Solve IK via Mujoco and Execute on Real-Robot: demo_realworld_set_robot.ipynb
