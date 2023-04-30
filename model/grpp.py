@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from util import soft_squash_multidim,kernel_levse
+import sys
+sys.path.append('../')
+from model.util import soft_squash_multidim,kernel_levse
 
 class GaussianRandomPathClass(object):
     def __init__(self,

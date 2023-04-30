@@ -29,7 +29,6 @@ def resetTool(graspclient):
     time.sleep(3)
     print("Reset Fininshed", end='\r')
 
-
 def closeGrasp(force,width,graspclient):
     # If grasped, reset&openGrasp
     if grasped(graspclient):

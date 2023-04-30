@@ -2,7 +2,9 @@ import os,cv2
 import numpy as np
 import mujoco
 import mujoco_viewer
-from util import pr2t,r2w,rpy2r,trim_scale,meters2xyz,compute_view_params
+import sys
+sys.path.append('../')
+from model.util import pr2t,r2w,rpy2r,trim_scale,meters2xyz,compute_view_params
 
 class MuJoCoParserClass(object):
     """
