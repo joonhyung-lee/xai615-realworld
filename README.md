@@ -1,5 +1,4 @@
 # xai615-realworld
-
 This repo provides minimal hands-on code for the class XAI615 in RealWorld Robot for Pick-n-Place Demo.
 
 MuJoCo related code is employed from following DeepMind's repos: 
@@ -30,5 +29,12 @@ RG2 - Gripper
 pip install pymodbus==2.4.0
 ```
 
-### Manipulator (Universal Robot `UR5e`)
-- Parsing an MJCF file and Solve IK via Mujoco and Execute on Real-Robot: demo_realworld_set_robot.ipynb
+### Descriptions
+Below is a list of files and their descriptions:
+
+1. [Gripper](https://github.com/joonhyung-lee/xai615-realworld/blob/main/code/demo_realworld_gripper.ipynb)
+2. [Get Topic](https://github.com/joonhyung-lee/xai615-realworld/blob/main/code/demo_realworld_get_topic.ipynb)
+3. [Solve IK](https://github.com/joonhyung-lee/xai615-realworld/blob/main/code/demo_realworld_solve_ik.ipynb)
+4. [Perception](https://github.com/joonhyung-lee/xai615-realworld/blob/main/code/demo_realworld_perception.ipynb)
+5. [Pick-n-Place](https://github.com/joonhyung-lee/xai615-realworld/blob/main/code/demo_realworld_pick_n_place.ipynb)
+
