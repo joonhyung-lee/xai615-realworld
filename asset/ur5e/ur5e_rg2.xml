@@ -88,7 +88,7 @@
         <geom mesh="shoulder_0" material="urblue" class="visual" />
         <geom mesh="shoulder_1" material="black" class="visual" />
         <geom mesh="shoulder_2" material="jointgray" class="visual" />
-        <geom class="collision" size="0.06 0.06" pos="0 0 -0.04" />
+        <geom name="shoulder_link" class="collision" size="0.06 0.06" pos="0 0 -0.04" />
         <body name="upper_arm_link" pos="0 0.138 0" quat="1 0 1 0">
           <inertial mass="8.393" pos="0 0 0.2125" diaginertia="0.133886 0.133886 0.0151074" />
           <joint name="shoulder_lift_joint" class="size3" />
@@ -96,8 +96,8 @@
           <geom mesh="upperarm_1" material="black" class="visual" />
           <geom mesh="upperarm_2" material="jointgray" class="visual" />
           <geom mesh="upperarm_3" material="urblue" class="visual" />
-          <geom class="collision" pos="0 -0.04 0" quat="1 1 0 0" size="0.06 0.06" />
-          <geom class="collision" size="0.05 0.2" pos="0 0 0.2" />
+          <geom name="upper_arm_link_1" class="collision" pos="0 -0.04 0" quat="1 1 0 0" size="0.06 0.06" />
+          <geom name="upper_arm_link_2" class="collision" size="0.05 0.2" pos="0 0 0.2" />
           <body name="forearm_link" pos="0 -0.131 0.425">
             <inertial mass="2.275" pos="0 0 0.196" diaginertia="0.0311796 0.0311796 0.004095" />
             <joint name="elbow_joint" class="size3_limited" />
@@ -105,41 +105,41 @@
             <geom mesh="forearm_1" material="linkgray" class="visual" />
             <geom mesh="forearm_2" material="black" class="visual" />
             <geom mesh="forearm_3" material="jointgray" class="visual" />
-            <geom class="collision" pos="0 0.08 0" quat="1 1 0 0" size="0.055 0.06" />
-            <geom class="collision" size="0.038 0.19" pos="0 0 0.2" />
+            <geom name="forearm_link_1" class="collision" pos="0 0.08 0" quat="1 1 0 0" size="0.055 0.06" />
+            <geom name="forearm_link_2" class="collision" size="0.038 0.19" pos="0 0 0.2" />
             <body name="wrist_1_link" pos="0 0 0.392" quat="1 0 1 0">
               <inertial mass="1.219" pos="0 0.127 0" diaginertia="0.0025599 0.0025599 0.0021942" />
               <joint name="wrist_1_joint" class="size1" />
               <geom mesh="wrist1_0" material="black" class="visual" />
               <geom mesh="wrist1_1" material="urblue" class="visual" />
               <geom mesh="wrist1_2" material="jointgray" class="visual" />
-              <geom class="collision" pos="0 0.05 0" quat="1 1 0 0" size="0.04 0.07" />
+              <geom name="wrist_1_link" class="collision" pos="0 0.05 0" quat="1 1 0 0" size="0.04 0.07" />
               <body name="wrist_2_link" pos="0 0.127 0">
                 <inertial mass="1.219" pos="0 0 0.1" diaginertia="0.0025599 0.0025599 0.0021942" />
                 <joint name="wrist_2_joint" axis="0 0 1" class="size1" />
                 <geom mesh="wrist2_0" material="black" class="visual" />
                 <geom mesh="wrist2_1" material="urblue" class="visual" />
                 <geom mesh="wrist2_2" material="jointgray" class="visual" />
-                <geom class="collision" size="0.04 0.06" pos="0 0 0.04" />
-                <geom class="collision" pos="0 0.02 0.1" quat="1 1 0 0" size="0.04 0.04" />
+                <geom name="wrist_2_link_1" class="collision" size="0.04 0.06" pos="0 0 0.04" />
+                <geom name="wrist_2_link_2" class="collision" pos="0 0.02 0.1" quat="1 1 0 0" size="0.04 0.04" />
                 <body name="wrist_3_link" pos="0 0 0.1">
                   <inertial mass="0.1889" pos="0 0.0771683 0" quat="1 0 0 1"
                     diaginertia="0.000132134 9.90863e-05 9.90863e-05" />
                   <joint name="wrist_3_joint" class="size1" />
                   <geom material="linkgray" mesh="wrist3" class="visual" />
-                  <geom class="eef_collision" pos="0 0.08 0" quat="1 1 0 0" size="0.04 0.02" />
+                  <geom name="wrist_3_link" class="eef_collision" pos="0 0.08 0" quat="1 1 0 0" size="0.04 0.02" />
                   <site name="attachment_site" pos="0 0.1 0" quat="-1 1 0 0" />
 
                   <body name="tcp_link" pos="0. 0.27 0.">
-                    <geom size="0.005 0.005 0.005" pos="0 0. 0." contype="0" conaffinity="0"
+                    <geom name="tcp_link" size="0.005 0.005 0.005" pos="0 0. 0." contype="0" conaffinity="0"
                       type="box" rgba="1.00 0.00 0.0 1" />
                   </body>
                   <!-- Camera -->
                   <body name="camera_mount" pos="0 0 0.">
-                    <geom pos="0 0.09 0" quat="0.000796327 1 0 0" type="mesh" contype="0"
+                    <geom name="camera_mount" pos="0 0.09 0" quat="0.000796327 1 0 0" type="mesh" contype="0"
                       conaffinity="0" group="1" rgba="0.7 0.7 0.7 1" mesh="mount" />
                     <!-- mounted gear -->
-                    <geom pos="0 0.09 -0.0870397" quat="0. 0.70767 0 0.70767" type="mesh"
+                    <geom name="camera_mounted_gear" pos="0 0.09 -0.0870397" quat="0. 0.70767 0 0.70767" type="mesh"
                       contype="0" conaffinity="1" group="1" rgba="0.8 0.8 0.8 0.8" mesh="d435" />
                     <!-- Gripper -->
                     <body name="rg2_gripper_base_link" pos="0 0.08 0"
@@ -148,12 +148,12 @@
                         pos="-0.000118835633453291 4.70054905894546E-06 0.0572680906518555"
                         quat="0.707058 0.00723369 0.00723345 0.707081" mass="0.199035856566616"
                         diaginertia="0.000170600248402307 0.000213152093040191 5.59878626220752E-05" />
-                      <geom type="mesh" contype="0" conaffinity="1" rgba="0.5 0.5 0.5 1"
+                      <geom name="rg2_gripper_base_link" type="mesh" contype="0" conaffinity="1" rgba="0.5 0.5 0.5 1"
                         friction="0.8 0.8 0.8" mesh="rg2_gripper_base_link" />
 
                       <!-- Camera center -->
                       <body name="camera_center" pos="0 -0.09 0.01">
-                        <geom size="0.005 0.005 0.005" pos="0 0. 0." contype="0" conaffinity="0"
+                        <geom name="camera_center" size="0.005 0.005 0.005" pos="0 0. 0." contype="0" conaffinity="0"
                           type="box" rgba="1.00 0.00 0.0 1" />
                         <camera name="egocentric" pos="0 0 0" xyaxes="1 0 0 0 -1 0" fovy="80" />
                       </body>
