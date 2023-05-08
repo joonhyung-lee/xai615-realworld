@@ -12,6 +12,9 @@ CAPTURE = True
 
 import subprocess
 import os
+import math
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 def capture_camera():
@@ -24,11 +27,7 @@ def capture_camera():
 
         subprocess.run([f"cd {perception}; ./experiments/scripts/ros_seg_rgbd_add_test_segmentation_realsense.sh $GPU_ID 0"], shell=True)
 
-capture_camera()
 # %%
-import numpy as np
-label_pixel = np.load(f'{perception}/label_data.npy')
-depth_pixel = np.load(f'{perception}/depth_data.npy') 
 
 # %%
 def Rotation_X(rad):
@@ -68,18 +67,7 @@ def HT_matrix(Rotation, Position):
 
 
 # %%
-import math
 
-# Calibration
-rotation_x   = Rotation_X(-math.pi)
-rotation_y   = Rotation_Y(-math.pi/180*55)
-rotation_mat = np.dot(rotation_x, rotation_y)
-
-# camera_p = np.load("planned_traj/camera_p.npy")
-camera_p = np.array([ 0.33107886, -0.25199999,  1.08883276])
-
-position_mat = Translation(*(camera_p.tolist()))
-transform_mat= HT_matrix(rotation_mat, position_mat)
 
 
 
@@ -144,8 +132,6 @@ def cluster_info_2_cleaned_point_cloud(label_pixel, depth_pixel, transform_mat, 
     cleaned_point_cloud = clean_point_cloud(single_cluster,clean_scale)
     return cleaned_point_cloud
 
-cleaned_point_cloud = cluster_info_2_cleaned_point_cloud(label_pixel, depth_pixel, transform_mat, clean_scale=2)
-
 # %%
 def project_YZ(cleaned_point_cloud, VIZ=False):
     # assume cleaned_point_cloud is the cleaned point cloud as a numpy array with shape (n_points, 3)
@@ -179,10 +165,10 @@ def project_YZ(cleaned_point_cloud, VIZ=False):
     center_z = (min_y+max_y)/2
     return center_z
 
-import numpy as np
-import matplotlib.pyplot as plt
 
-center_z = project_YZ(cleaned_point_cloud, VIZ=True)
+
+
+
 
 # %%
 import numpy as np
@@ -217,7 +203,7 @@ def project_XY(cleaned_point_cloud, VIZ=False):
     plt.show()
     return center_x, center_y, radius
 
-center_x, center_y, radius = project_XY(cleaned_point_cloud, VIZ=True)
+
 
 # %%
 def run_camera(perception_path, camera_p, rotation_mat, clean_scale=3):
@@ -256,6 +242,31 @@ def get_center_position(perception_path, camera_p, rotation_mat, clean_scale = 2
 
     return center_position_array, radius
 
-center_position_array, radius = get_center_position(perception, camera_p, rotation_mat, clean_scale = 3, VIZ=True)
+
+if __name__ == "__main__":
+    capture_camera()
+
+    label_pixel = np.load(f'{perception}/label_data.npy')
+    depth_pixel = np.load(f'{perception}/depth_data.npy') 
+
+
+    # Calibration
+    rotation_x   = Rotation_X(-math.pi)
+    rotation_y   = Rotation_Y(-math.pi/180*55)
+    rotation_mat = np.dot(rotation_x, rotation_y)
+
+    # camera_p = np.load("planned_traj/camera_p.npy")
+    camera_p = np.array([ 0.33107886, -0.25199999,  1.08883276])
+
+    position_mat = Translation(*(camera_p.tolist()))
+    transform_mat= HT_matrix(rotation_mat, position_mat)
+    cleaned_point_cloud = cluster_info_2_cleaned_point_cloud(label_pixel, depth_pixel, transform_mat, clean_scale=2)
+
+
+
+    center_z = project_YZ(cleaned_point_cloud, VIZ=True)
+    center_x, center_y, radius = project_XY(cleaned_point_cloud, VIZ=True)
+
+    # center_position_array, radius = get_center_position(perception, camera_p, rotation_mat, clean_scale = 3, VIZ=True)
 
 # %%
