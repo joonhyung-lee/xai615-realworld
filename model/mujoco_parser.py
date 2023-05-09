@@ -582,6 +582,119 @@ class MuJoCoParserClass(object):
                 geom2s.append(contact_geom2)
         return p_contacts,f_contacts,geom1s,geom2s
 
+    def get_multiple_contact_info(self, must_include_prefixes=None, must_exclude_prefixes=None):
+        """
+        Get multiple contact information
+        """
+        p_contacts = []
+        f_contacts = []
+        geom1s = []
+        geom2s = []
+        for c_idx in range(self.data.ncon):
+            contact = self.data.contact[c_idx]
+            # Contact position and frame orientation
+            p_contact = contact.pos  # contact position
+            R_frame = contact.frame.reshape((3, 3))
+            # Contact force
+            f_contact_local = np.zeros(6, dtype=np.float64)
+            mujoco.mj_contactForce(self.model, self.data, 0, f_contact_local)
+            f_contact = R_frame @ f_contact_local[:3]  # in the global coordinate
+            # Contacting geoms
+            contact_geom1 = self.geom_names[contact.geom1]
+            contact_geom2 = self.geom_names[contact.geom2]
+            # Append
+            if must_include_prefixes is not None:
+                include_contact = False
+                for prefix in must_include_prefixes:
+                    if (contact_geom1.startswith(prefix)) or (contact_geom2.startswith(prefix)):
+                        include_contact = True
+                        break
+                if include_contact:
+                    p_contacts.append(p_contact)
+                    f_contacts.append(f_contact)
+                    geom1s.append(contact_geom1)
+                    geom2s.append(contact_geom2)
+            elif must_exclude_prefixes is not None:
+                exclude_contact = True
+                for prefix in must_exclude_prefixes:
+                    if (contact_geom1.startswith(prefix)) or (contact_geom2.startswith(prefix)):
+                        exclude_contact = False
+                        break
+                if exclude_contact:
+                    p_contacts.append(p_contact)
+                    f_contacts.append(f_contact)
+                    geom1s.append(contact_geom1)
+                    geom2s.append(contact_geom2)
+            else:
+                p_contacts.append(p_contact)
+                f_contacts.append(f_contact)
+                geom1s.append(contact_geom1)
+                geom2s.append(contact_geom2)
+        return p_contacts, f_contacts, geom1s, geom2s
+
+    def get_multiple_contact_info_exclude_btw_geoms(self, must_include_prefixes=None, must_exclude_prefixes=None, exclude_btw_geoms=None):
+        """
+        Get multiple contact information and exclude between specific geoms
+        """
+        p_contacts = []
+        f_contacts = []
+        geom1s = []
+        geom2s = []
+        if exclude_btw_geoms is not None:
+            excluded_pairs = [(prefix1, prefix2) for i, prefix1 in enumerate(exclude_btw_geoms) for prefix2 in exclude_btw_geoms[i+1:]]
+        else:
+            excluded_pairs = []
+        for c_idx in range(self.data.ncon):
+            contact = self.data.contact[c_idx]
+            # Contact position and frame orientation
+            p_contact = contact.pos  # contact position
+            R_frame = contact.frame.reshape((3, 3))
+            # Contact force
+            f_contact_local = np.zeros(6, dtype=np.float64)
+            mujoco.mj_contactForce(self.model, self.data, 0, f_contact_local)
+            f_contact = R_frame @ f_contact_local[:3]  # in the global coordinate
+            # Contacting geoms
+            contact_geom1 = self.geom_names[contact.geom1]
+            contact_geom2 = self.geom_names[contact.geom2]
+            # Append
+            if must_include_prefixes is not None:
+                include_contact = False
+                for prefix in must_include_prefixes:
+                    if (contact_geom1.startswith(prefix)) or (contact_geom2.startswith(prefix)):
+                        include_contact = True
+                        break
+                if include_contact:
+                    p_contacts.append(p_contact)
+                    f_contacts.append(f_contact)
+                    geom1s.append(contact_geom1)
+                    geom2s.append(contact_geom2)
+            elif must_exclude_prefixes is not None:
+                exclude_contact = True
+                for prefix in must_exclude_prefixes:
+                    if (contact_geom1.startswith(prefix)) or (contact_geom2.startswith(prefix)):
+                        exclude_contact = False
+                        break
+                if exclude_contact:
+                    p_contacts.append(p_contact)
+                    f_contacts.append(f_contact)
+                    geom1s.append(contact_geom1)
+                    geom2s.append(contact_geom2)
+            else:
+                excluded = False
+                for prefix1, prefix2 in excluded_pairs:
+                    if (contact_geom1.startswith(prefix1) and contact_geom2.startswith(prefix2)) or \
+                            (contact_geom1.startswith(prefix2) and contact_geom2.startswith(prefix1)):
+                        excluded = True
+                        break
+                if excluded:
+                    continue  # skip this contact
+                p_contacts.append(p_contact)
+                f_contacts.append(f_contact)
+                geom1s.append(contact_geom1)
+                geom2s.append(contact_geom2)
+        return p_contacts, f_contacts, geom1s, geom2s
+
+
     def plot_contact_info(self,must_include_prefix=None):
         """
             Plot contact information
