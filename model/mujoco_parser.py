@@ -483,7 +483,6 @@ class MuJoCoParserClass(object):
 
         return q_ik
 
-
     def solve_nullspace_projected_ik(self, ik_body_name_pri, ik_body_name_sec, p_trgt_pri, p_trgt_sec,
                         R_trgt_pri, R_trgt_sec, IK_Ps, IK_Rs, q_init, idxs_forward, idxs_jacobian,
                         RESET=True,DO_RENDER=True,render_every=1,th=1*np.pi/180.0,err_th_pri=1e-6, err_th_sec=1e-2):
