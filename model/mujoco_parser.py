@@ -345,7 +345,7 @@ class MuJoCoParserClass(object):
         J_full = np.array(np.vstack([J_p,J_R]))
         return J_p,J_R,J_full
 
-    def get_ik_ingredients(self,body_name,p_trgt=None,R_trgt=None,IK_P=True,IK_R=True):
+    def get_ik_ingredients(self,body_name,p_trgt=None,R_trgt=None,IK_P=True,IK_R=True, w_weight=1):
         """
             Get IK ingredients
         """
@@ -356,7 +356,7 @@ class MuJoCoParserClass(object):
             R_err = np.linalg.solve(R_curr,R_trgt)
             w_err = R_curr @ r2w(R_err)
             J     = J_full
-            err   = np.concatenate((p_err,w_err))
+            err   = np.concatenate((p_err,w_weight*w_err))
         elif (IK_P and not IK_R):
             p_err = (p_trgt-p_curr)
             J     = J_p
