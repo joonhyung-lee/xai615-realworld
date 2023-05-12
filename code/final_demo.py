@@ -10,30 +10,6 @@ import matplotlib.pyplot as plt
 print("Done.")
 
 # %%
-# class UR_Test():
-#     def __init__(self):
-#         self.tick = 0
-#         self.joint_list = None 
-#         self.joint_sub = rospy.Subscriber('/joint_states', JointState, self.joint_callback)
-
-#         tic_temp=0 
-
-#         while self.tick<2: 
-#             time.sleep(1e-3)
-#             tic_temp=tic_temp+1
-
-#             if tic_temp>5000: 
-#                 print ("[ERROR] GET JOINTS")
-#                 break 
-            
-#     def joint_callback(self, joint_msg):
-#         """
-#             Get joint values about each joint.
-#         """
-#         self.tick+=1 
-#         self.joint_list = joint_msg 
-
-# %%
 import roslib; roslib.load_manifest('ur_driver')
 import rospy
 import actionlib
@@ -55,6 +31,19 @@ class UR(object):
         
    
     def move_arm_speed(self, traj:JointTrajectory, speed_limit):
+        joint_pos1 = rospy.wait_for_message("joint_states", JointState).position
+        rospy.sleep(0.1)
+        joint_pos2 = rospy.wait_for_message("joint_states", JointState).position
+
+        joint_pos1, joint_pos2 = np.array(joint_pos1), np.array(joint_pos2)
+
+        diff = np.linalg.norm(joint_pos2 - joint_pos1)
+
+        
+        if diff > 1e-3:            
+            raise Exception(f"Loose Connection, diff:{diff}")
+        assert np.linalg.norm(joint_pos2) < 20
+
         try: 
             g = FollowJointTrajectoryGoal()
             g.trajectory = copy.deepcopy(traj)
@@ -62,11 +51,15 @@ class UR(object):
             joint_states = rospy.wait_for_message("joint_states", JointState)
             joints_pos   = joint_states.position
 
+            if np.linalg.norm(joints_pos) > 10:
+                print("Loose Connection")
+                return None
+
             init_point = JointTrajectoryPoint()
             init_point.positions = joints_pos
-            init_point.time_from_start = rospy.Duration.from_sec(0.1)
+            init_point.time_from_start = rospy.Duration.from_sec(0.0)
             init_point.velocities = [0 for _ in range(6)]
-            g.trajectory.points.insert(0, init_point)
+            g.trajectory.points.insert(0, copy.deepcopy(init_point))
 
             q_list = []
             time_list = []
@@ -88,12 +81,11 @@ class UR(object):
 
                 speed = np.linalg.norm(diff_q)/diff_time
                 print(speed)
-                assert speed <= speed_limit
-            
-            
+                if speed >= speed_limit:
+                    print(f"Speed is too fast: {speed} < {speed_limit}")
+                    return None
 
             self.client.send_goal(g)
-            # self.client.wait_for_result()
         except KeyboardInterrupt:
             self.client.cancel_goal()
             raise
@@ -130,7 +122,6 @@ class UR(object):
 
 # %%
 rospy.init_node('final_demo')
-# ur_test = UR_Test()
 
 # %%
 import mujoco
@@ -187,7 +178,7 @@ print(env.get_q(joint_idxs=idxs_jacobian))
 
 joint_names = env.rev_joint_names[:6]
 
-p_cam = env.get_p_body("camera_center") - env.get_p_body("base")
+p_cam = env.get_p_body("camera_center") - env.get_p_body("base") + np.array([0, 0.01,0])
 
 R_world = env.get_R_body('camera_center')
 R_world
@@ -208,7 +199,7 @@ rotation_mat = np.dot(rotation_x, rotation_y)
 
 robot = UR()
 
-q = cature_q
+q = copy.deepcopy(cature_q)
 q_traj = JointTrajectory()
 
 point = JointTrajectoryPoint()
@@ -217,13 +208,25 @@ point.velocities = [0 for _ in range(6)]
 point.time_from_start = rospy.Duration.from_sec(20)
 
 q_traj.points.append(point)
-robot.execute_arm_speed(q_traj, speed_limit=0.1)
-
-perception_path =  "/home/terry/Rilab/sOftrobot/UnseenObjectClustering"
-center_position_array, radius = get_center_position(perception_path, p_cam, rotation_mat, clean_scale = 3, VIZ=True)
-tcp_target = np.array([center_position_array[0], center_position_array[1], 0.04]) + env.get_p_body("base")
+robot.execute_arm_speed(q_traj, speed_limit=0.2)
+robot.client.wait_for_result()
 
 # %%
+perception_path =  "/home/terry/Rilab/sOftrobot/UnseenObjectClustering"
+center_position_list, radius_list= get_center_position(perception_path, p_cam, rotation_mat, clean_scale = 3, VIZ=True)
+
+# number of objects
+assert len(center_position_list) == 2
+
+target_idx = np.argmin(np.stack(center_position_list)[:,1])
+pick_position_array = center_position_list[target_idx]
+place_position_array = center_position_list[1-target_idx]
+
+pick_target = np.array([pick_position_array[0], pick_position_array[1], 0.04]) + env.get_p_body("base")
+place_target = np.array([place_position_array[0], place_position_array[1], 0.04]) + env.get_p_body("base")
+
+# %%
+# Solve IK
 import math
 PI = math.pi
 
@@ -243,17 +246,34 @@ env.forward(q=cature_q,joint_idxs=idxs_forward)
 delta_p =  (env.get_p_body("tcp_link")-env.get_p_body('wrist_3_link'))
 R_ = env.get_R_body("wrist_3_link")
 p_offset = R_.T @ delta_p
-wrist3_target = tcp_target - p_offset[[1,0,2]]
+wrist3_target = pick_target - p_offset[[1,0,2]]
 
 
 # Set (multiple) IK targets
 ik_body_names = ['tcp_link','wrist_3_link']
-ik_p_trgts = [tcp_target,
+ik_p_trgts_1 = [pick_target+np.array([-0.1,0,0]),
+              wrist3_target+np.array([-0.1,0,0])]
+ik_p_trgts_2 = [pick_target,
               wrist3_target]
+ik_p_trgts_3 = [pick_target+np.array([0,0,0.25]),
+              wrist3_target+np.array([0,0,0.25])]
+
+wrist3_target = place_target - p_offset[[1,0,2]]
+ik_p_trgts_4 = [place_target+np.array([0,0,0.25]),
+              wrist3_target+np.array([0,0,0.25])]
+
+ik_p_trgts_5 = [place_target+np.array([0,0,0.22]),
+              wrist3_target+np.array([0,0,0.22])]
+
+
+
 ik_R_trgts = [rpy2r(np.array([0, 1, -0.5])*PI ),
               rpy2r([0,0,0])]
 IK_Ps = [True,True]
 IK_Rs = [True,False]
+
+ik_p_trgts_list = [ik_p_trgts_1, ik_p_trgts_2, ik_p_trgts_3, ik_p_trgts_4, ik_p_trgts_5]
+grasp_list = [None, 'close', None, None, 'open']
 
 # Loop
 q = env.get_q(joint_idxs=idxs_jacobian)
@@ -261,60 +281,62 @@ q = env.get_q(joint_idxs=idxs_jacobian)
 # q = env.data.qpos[16:22]
 imgs,img_ticks,max_tick = [],[],1000
 qs = []
-while (env.tick < max_tick) and env.is_viewer_alive():
-    # Numerical IK
-    J_aug,err_aug = [],[]
-    for ik_idx,ik_body_name in enumerate(ik_body_names):
-        p_trgt,R_trgt = ik_p_trgts[ik_idx],ik_R_trgts[ik_idx]
-        IK_P,IK_R = IK_Ps[ik_idx],IK_Rs[ik_idx]
-        J,err = env.get_ik_ingredients(
-            body_name=ik_body_name,p_trgt=p_trgt,R_trgt=R_trgt,IK_P=IK_P,IK_R=IK_R)
-        if (J is None) and (err is None): continue
-        if len(J_aug) == 0:
-            J_aug,err_aug = J,err
-        else:
-            J_aug   = np.concatenate((J_aug,J),axis=0)
-            err_aug = np.concatenate((err_aug,err),axis=0)
-    dq = env.damped_ls(J_aug,err_aug,stepsize=1,eps=1e-1,th=5*np.pi/180.0)
+
+for ik_p_trgts in ik_p_trgts_list:
+    while (env.tick < max_tick) and env.is_viewer_alive():
+        # Numerical IK
+        J_aug,err_aug = [],[]
+        for ik_idx,ik_body_name in enumerate(ik_body_names):
+            p_trgt,R_trgt = ik_p_trgts[ik_idx],ik_R_trgts[ik_idx]
+            IK_P,IK_R = IK_Ps[ik_idx],IK_Rs[ik_idx]
+            J,err = env.get_ik_ingredients(
+                body_name=ik_body_name,p_trgt=p_trgt,R_trgt=R_trgt,IK_P=IK_P,IK_R=IK_R, w_weight=0.5)
+            if (J is None) and (err is None): continue
+            if len(J_aug) == 0:
+                J_aug,err_aug = J,err
+            else:
+                J_aug   = np.concatenate((J_aug,J),axis=0)
+                err_aug = np.concatenate((err_aug,err),axis=0)
+        dq = env.damped_ls(J_aug,err_aug,stepsize=1,eps=1e-1,th=5*np.pi/180.0)
+
+        err_norm = np.linalg.norm(err_aug)
+        if err_norm < err_th:
+            break
+
+        # Update q and FK
+        q = q + dq[idxs_jacobian]
+        env.forward(q=q,joint_idxs=idxs_forward)
+
+        p_contacts,f_contacts,geom1s,geom2s = env.get_contact_info(must_exclude_prefix="obj_")
+
+        geom1s_ = [obj_ for obj_ in geom1s if obj_ not in ["rg2_gripper_finger1_finger_tip_link","rg2_gripper_finger2_finger_tip_link"]]
+        geom2s_ = [obj_ for obj_ in geom2s if obj_ not in ["rg2_gripper_finger1_finger_tip_link","rg2_gripper_finger2_finger_tip_link"]]
+
+        # if len(geom1s_) > 0:
+        #     print(f"Collision with {geom1s_[0]} and {geom2s_[0]}")
+        #     break
+
+        # Render
+        for ik_idx,ik_body_name in enumerate(ik_body_names):
+            p_trgt,R_trgt = ik_p_trgts[ik_idx],ik_R_trgts[ik_idx]
+            IK_P,IK_R = IK_Ps[ik_idx],IK_Rs[ik_idx]
+            if (IK_P is None) and (IK_R is None): continue
+            env.plot_T(p=env.get_p_body(body_name=ik_body_name),R=env.get_R_body(body_name=ik_body_name),
+                    PLOT_AXIS=IK_R,axis_len=0.2,axis_width=0.01,
+                    PLOT_SPHERE=IK_P,sphere_r=0.05,sphere_rgba=[1,0,0,0.9])
+            env.plot_T(p=p_trgt,R=R_trgt,
+                    PLOT_AXIS=IK_R,axis_len=0.2,axis_width=0.01,
+                    PLOT_SPHERE=IK_P,sphere_r=0.05,sphere_rgba=[0,0,1,0.9])
+        env.plot_T(p=[0,0,0],R=np.eye(3,3),PLOT_AXIS=True,axis_len=1.0)
+        env.render()
+        # Print and save image 
+        if (env.tick)%(max_tick//10)==0 or (env.tick==1):
+            print ("[%d/%d] IK error:[%.4f]"%(env.tick,max_tick,np.linalg.norm(err_aug)))
+            img = env.grab_image()
+            imgs.append(img)
+            img_ticks.append(env.tick)
 
     qs.append(q)
-    err_norm = np.linalg.norm(err_aug)
-    if err_norm < err_th:
-        break
-
-    # Update q and FK
-    q = q + dq[idxs_jacobian]
-    env.forward(q=q,joint_idxs=idxs_forward)
-
-    p_contacts,f_contacts,geom1s,geom2s = env.get_contact_info(must_exclude_prefix="obj_")
-
-    geom1s_ = [obj_ for obj_ in geom1s if obj_ not in ["rg2_gripper_finger1_finger_tip_link","rg2_gripper_finger2_finger_tip_link"]]
-    geom2s_ = [obj_ for obj_ in geom2s if obj_ not in ["rg2_gripper_finger1_finger_tip_link","rg2_gripper_finger2_finger_tip_link"]]
-
-    if len(geom1s_) > 0:
-        print(f"Collision with {geom1s_[0]} and {geom2s_[0]}")
-        break
-
-    # Render
-    for ik_idx,ik_body_name in enumerate(ik_body_names):
-        p_trgt,R_trgt = ik_p_trgts[ik_idx],ik_R_trgts[ik_idx]
-        IK_P,IK_R = IK_Ps[ik_idx],IK_Rs[ik_idx]
-        if (IK_P is None) and (IK_R is None): continue
-        env.plot_T(p=env.get_p_body(body_name=ik_body_name),R=env.get_R_body(body_name=ik_body_name),
-                   PLOT_AXIS=IK_R,axis_len=0.2,axis_width=0.01,
-                   PLOT_SPHERE=IK_P,sphere_r=0.05,sphere_rgba=[1,0,0,0.9])
-        env.plot_T(p=p_trgt,R=R_trgt,
-                   PLOT_AXIS=IK_R,axis_len=0.2,axis_width=0.01,
-                   PLOT_SPHERE=IK_P,sphere_r=0.05,sphere_rgba=[0,0,1,0.9])
-    env.plot_T(p=[0,0,0],R=np.eye(3,3),PLOT_AXIS=True,axis_len=1.0)
-    env.render()
-    # Print and save image 
-    if (env.tick)%(max_tick//10)==0 or (env.tick==1):
-        print ("[%d/%d] IK error:[%.4f]"%(env.tick,max_tick,np.linalg.norm(err_aug)))
-        img = env.grab_image()
-        imgs.append(img)
-        img_ticks.append(env.tick)
-
 qs_array = np.array(qs)
 
 # Close viewers
@@ -322,20 +344,31 @@ env.close_viewer()
 print ("Done.")
 
 
+# %%
+""" FOR ONROBOT RG2 """
+from pymodbus.client.sync import ModbusTcpClient
+""" FOR MODERN DRIVER """
+import roslib; roslib.load_manifest('ur_driver')
+import rospy
+import sys
+from model.gripper import openGrasp, closeGrasp
+
+graspclient = ModbusTcpClient('192.168.0.22') 
 
 # %%
-
-
-unit_time = 1
+unit_time = 2
 track_time = 0
 
 q_before = cature_q
-speed_limit = 0.1 # speed limit of joint velocity (Must be fixed to consider EE velocity instead)
+speed_limit = 0.5 # speed limit of joint velocity (Must be fixed to consider EE velocity instead)
+
+openGrasp(force=200, width=1000, graspclient=graspclient)
 
 for i, qs in enumerate(qs_array):    
-    delta_q = np.linalg.norm(qs - q_before)
+    q_traj = JointTrajectory()
 
-    unit_time = max(delta_q/0.2, unit_time)
+    delta_q = np.linalg.norm(qs - q_before)
+    unit_time = max(delta_q/(speed_limit*0.9), unit_time)
     
     track_time = track_time + unit_time
     point = JointTrajectoryPoint()
@@ -345,3 +378,25 @@ for i, qs in enumerate(qs_array):
     q_traj.points.append(point)
     
     q_before = qs
+
+    robot.execute_arm_speed(q_traj, speed_limit=speed_limit)
+    robot.client.wait_for_result()
+
+    if grasp_list[i] is None:
+        continue
+    elif grasp_list[i].lower() == 'open':
+        openGrasp(force=200, width=1000, graspclient=graspclient)
+    elif grasp_list[i] == 'close':
+        closeGrasp(force=200, width=100, graspclient=graspclient)
+    else:
+        raise ValueError('grasp_list must be None, open, or close')
+
+
+
+# %%
+closeGrasp(force=200, width=100, graspclient=graspclient)
+
+
+
+# %%
+openGrasp(force=200, width=1000, graspclient=graspclient)

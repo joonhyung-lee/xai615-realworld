@@ -111,6 +111,8 @@ def clean_point_cloud(single_cluster,clean_scale):
 # %%
 def cluster_info_2_cleaned_point_cloud(label_pixel, depth_pixel, transform_mat, clean_scale=3):
     clustering_num=len(np.unique(label_pixel))
+
+    cluster_list = []
     # Total cluster loop
     for cluster_idx in range(clustering_num):
         if cluster_idx ==0: continue
@@ -126,11 +128,16 @@ def cluster_info_2_cleaned_point_cloud(label_pixel, depth_pixel, transform_mat, 
             position=camera_to_base(transform_mat, np.array([[x,y,z]])).reshape(-1)
             clusters.append(position)
 
-        break
+        
             
-    single_cluster = np.stack(clusters)
-    cleaned_point_cloud = clean_point_cloud(single_cluster,clean_scale)
-    return cleaned_point_cloud
+        single_cluster = np.stack(clusters)
+        cluster_list.append(single_cluster)
+    
+    cleaned_point_cloud_list = []
+    for single_cluster in cluster_list:
+        cleaned_point_cloud = clean_point_cloud(single_cluster,clean_scale)
+        cleaned_point_cloud_list.append(cleaned_point_cloud)
+    return cleaned_point_cloud_list
 
 # %%
 def project_YZ(cleaned_point_cloud, VIZ=False):
@@ -235,12 +242,19 @@ def run_camera(perception_path, camera_p, rotation_mat, clean_scale=3):
 
 # %%
 def get_center_position(perception_path, camera_p, rotation_mat, clean_scale = 2, VIZ=False):
-    cleaned_point_cloud = run_camera(perception_path, camera_p, rotation_mat, clean_scale)
-    center_z = project_YZ(cleaned_point_cloud, VIZ=VIZ)
-    center_x, center_y, radius = project_XY(cleaned_point_cloud, VIZ=VIZ)
-    center_position_array = np.array([center_y,center_x, center_z])
+    cleaned_point_cloud_list = run_camera(perception_path, camera_p, rotation_mat, clean_scale)
+    
+    center_position_list = []
+    radius_list = []
+    for cleaned_point_cloud in cleaned_point_cloud_list:
 
-    return center_position_array, radius
+        center_z = project_YZ(cleaned_point_cloud, VIZ=VIZ)
+        center_x, center_y, radius = project_XY(cleaned_point_cloud, VIZ=VIZ)
+        center_position_array = np.array([center_y,center_x, center_z])
+        center_position_list.append(center_position_array)
+        radius_list.append(radius)
+
+    return center_position_list, radius_list
 
 
 if __name__ == "__main__":
