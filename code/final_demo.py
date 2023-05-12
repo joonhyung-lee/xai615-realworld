@@ -213,10 +213,20 @@ robot.client.wait_for_result()
 
 # %%
 perception_path =  "/home/terry/Rilab/sOftrobot/UnseenObjectClustering"
-center_position_array, radius = get_center_position(perception_path, p_cam, rotation_mat, clean_scale = 3, VIZ=True)
-tcp_target = np.array([center_position_array[0], center_position_array[1], 0.04]) + env.get_p_body("base")
+center_position_list, radius_list= get_center_position(perception_path, p_cam, rotation_mat, clean_scale = 3, VIZ=True)
+
+# number of objects
+assert len(center_position_list) == 2
+
+target_idx = np.argmin(np.stack(center_position_list)[:,1])
+pick_position_array = center_position_list[target_idx]
+place_position_array = center_position_list[1-target_idx]
+
+pick_target = np.array([pick_position_array[0], pick_position_array[1], 0.04]) + env.get_p_body("base")
+place_target = np.array([place_position_array[0], place_position_array[1], 0.04]) + env.get_p_body("base")
 
 # %%
+# Solve IK
 import math
 PI = math.pi
 
@@ -236,22 +246,34 @@ env.forward(q=cature_q,joint_idxs=idxs_forward)
 delta_p =  (env.get_p_body("tcp_link")-env.get_p_body('wrist_3_link'))
 R_ = env.get_R_body("wrist_3_link")
 p_offset = R_.T @ delta_p
-wrist3_target = tcp_target - p_offset[[1,0,2]]
+wrist3_target = pick_target - p_offset[[1,0,2]]
 
 
 # Set (multiple) IK targets
 ik_body_names = ['tcp_link','wrist_3_link']
-ik_p_trgts_1 = [tcp_target+np.array([-0.1,0,0]),
+ik_p_trgts_1 = [pick_target+np.array([-0.1,0,0]),
               wrist3_target+np.array([-0.1,0,0])]
-ik_p_trgts_2 = [tcp_target,
+ik_p_trgts_2 = [pick_target,
               wrist3_target]
+ik_p_trgts_3 = [pick_target+np.array([0,0,0.25]),
+              wrist3_target+np.array([0,0,0.25])]
+
+wrist3_target = place_target - p_offset[[1,0,2]]
+ik_p_trgts_4 = [place_target+np.array([0,0,0.25]),
+              wrist3_target+np.array([0,0,0.25])]
+
+ik_p_trgts_5 = [place_target+np.array([0,0,0.22]),
+              wrist3_target+np.array([0,0,0.22])]
+
+
 
 ik_R_trgts = [rpy2r(np.array([0, 1, -0.5])*PI ),
               rpy2r([0,0,0])]
 IK_Ps = [True,True]
 IK_Rs = [True,False]
 
-ik_p_trgts_list = [ik_p_trgts_1, ik_p_trgts_2]
+ik_p_trgts_list = [ik_p_trgts_1, ik_p_trgts_2, ik_p_trgts_3, ik_p_trgts_4, ik_p_trgts_5]
+grasp_list = [None, 'close', None, None, 'open']
 
 # Loop
 q = env.get_q(joint_idxs=idxs_jacobian)
@@ -322,17 +344,29 @@ env.close_viewer()
 print ("Done.")
 
 
+# %%
+""" FOR ONROBOT RG2 """
+from pymodbus.client.sync import ModbusTcpClient
+""" FOR MODERN DRIVER """
+import roslib; roslib.load_manifest('ur_driver')
+import rospy
+import sys
+from model.gripper import openGrasp, closeGrasp
+
+graspclient = ModbusTcpClient('192.168.0.22') 
 
 # %%
-q_traj = JointTrajectory()
-
 unit_time = 2
 track_time = 0
 
 q_before = cature_q
-speed_limit = 0.3 # speed limit of joint velocity (Must be fixed to consider EE velocity instead)
+speed_limit = 0.5 # speed limit of joint velocity (Must be fixed to consider EE velocity instead)
+
+openGrasp(force=200, width=1000, graspclient=graspclient)
 
 for i, qs in enumerate(qs_array):    
+    q_traj = JointTrajectory()
+
     delta_q = np.linalg.norm(qs - q_before)
     unit_time = max(delta_q/(speed_limit*0.9), unit_time)
     
@@ -345,24 +379,24 @@ for i, qs in enumerate(qs_array):
     
     q_before = qs
 
-robot.execute_arm_speed(q_traj, speed_limit=speed_limit)
+    robot.execute_arm_speed(q_traj, speed_limit=speed_limit)
+    robot.client.wait_for_result()
 
-# %%
+    if grasp_list[i] is None:
+        continue
+    elif grasp_list[i].lower() == 'open':
+        openGrasp(force=200, width=1000, graspclient=graspclient)
+    elif grasp_list[i] == 'close':
+        closeGrasp(force=200, width=100, graspclient=graspclient)
+    else:
+        raise ValueError('grasp_list must be None, open, or close')
 
-""" FOR ONROBOT RG2 """
-from pymodbus.client.sync import ModbusTcpClient
-""" FOR MODERN DRIVER """
-import roslib; roslib.load_manifest('ur_driver')
-import rospy
-import sys
-from model.gripper import openGrasp, closeGrasp
 
-graspclient = ModbusTcpClient('192.168.0.22') 
 
 # %%
 closeGrasp(force=200, width=100, graspclient=graspclient)
 
 
 
-
+# %%
 openGrasp(force=200, width=1000, graspclient=graspclient)
