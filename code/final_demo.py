@@ -206,7 +206,6 @@ robot.client.wait_for_result()
 
 # %%
 from demo_realworld_perception import run_camera, project_XY, project_YZ
-
 perception_path =  "/home/terry/Rilab/sOftrobot/UnseenObjectClustering"
     
     
@@ -218,10 +217,78 @@ np.save("cleaned_point_cloud_list1.npy", cleaned_point_cloud_list[0].tolist())
 np.save("cleaned_point_cloud_list2.npy", cleaned_point_cloud_list[1].tolist())
 
 # %%
+edge = 0.01
+image_path = "XY.png"
+ax, fig, XY_info = project_XY(cleaned_point_cloud_list[0], edge, SAVE=image_path)
+plt.show()
+
+def detect_circle(image_path):
+    import cv2
+    import numpy as np
+
+    # Load image
+    partial_image = cv2.imread(image_path, 0)
+
+    # Apply Gaussian blur to reduce noise
+    blurred_image = cv2.GaussianBlur(partial_image, (5, 5), 0)
+
+    # Apply Canny edge detection
+    edges = cv2.Canny(blurred_image, 30, 100)
+
+    # Find contours in the edge image
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # Initialize variables for circle detection using RANSAC
+    best_circle = None
+    max_inliers = 0
+    num_iterations = 1000
+    threshold_distance = 5  # Adjust this value based on the expected circle size
+
+    # Perform RANSAC iterations
+    for _ in range(num_iterations):
+        # Randomly select three points from the contours
+        random_points = np.random.choice(len(contours), 100, replace=False)
+        points = [contours[i][0] for i in random_points]
+
+        # Fit a circle using the selected points
+        (x, y), radius = cv2.minEnclosingCircle(np.array(points))
+        center = (int(x), int(y))
+        radius = int(radius)
+
+        # Count inliers (points within threshold distance to the circle)
+        inliers = sum(cv2.pointPolygonTest(contour, center, True) <= threshold_distance for contour in contours)
+
+        # Update the best circle if more inliers are found
+        if inliers > max_inliers:
+            max_inliers = inliers
+            best_circle = (center, radius)
+
+    # Draw the best circle on the original image
+    if best_circle is not None:
+        center, radius = best_circle
+        cv2.circle(partial_image, center, radius, (0, 255, 0), 2)
+
+    # Display the result
+    plt.imshow(partial_image, cmap='gray')
+    return partial_image, center, radius
+
+partial_image, center_pixel, radius_pixel = detect_circle("XY.png")
+scale_rate = 2*(XY_info['radius']+XY_info['edge'])/partial_image.shape[0]
+
+center_x = center_pixel[0] * scale_rate + XY_info['center_x'] - (XY_info['radius']+edge)
+center_y = -center_pixel[1] * scale_rate + XY_info['center_y'] + (XY_info['radius']+edge)
+radius = radius_pixel * scale_rate
+
+project_XY(cleaned_point_cloud_list[0], edge=edge, SAVE=None)
+circle = plt.Circle((center_x, center_y), radius, fill=False)
+ax.add_artist(circle)
+plt.show()
 
 
 
 # %%
+# Fix the code below
+
 center_position_list = []
 radius_list = []
 for cleaned_point_cloud in cleaned_point_cloud_list:
