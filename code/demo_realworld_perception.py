@@ -110,11 +110,11 @@ def clean_point_cloud(single_cluster,clean_scale):
 
 # %%
 def cluster_info_2_cleaned_point_cloud(label_pixel, depth_pixel, transform_mat, clean_scale=3):
-    clustering_num=len(np.unique(label_pixel))
+    # clustering_num=len(np.unique(label_pixel))
 
     cluster_list = []
     # Total cluster loop
-    for cluster_idx in range(clustering_num):
+    for cluster_idx in np.unique(label_pixel):
         if cluster_idx ==0: continue
 
         # Random color 
