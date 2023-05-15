@@ -181,7 +181,7 @@ def project_YZ(cleaned_point_cloud, VIZ=False):
 import numpy as np
 import matplotlib.pyplot as plt
 
-def project_XY(cleaned_point_cloud, VIZ=False):
+def project_XY(cleaned_point_cloud, edge = 0.01, SAVE=None):
     # assume cleaned_point_cloud is the cleaned point cloud as a numpy array with shape (n_points, 3)
 
     # project points onto the XY plane by ignoring the Z coordinate
@@ -199,17 +199,19 @@ def project_XY(cleaned_point_cloud, VIZ=False):
     # plot the circle and points
     fig, ax = plt.subplots()
     ax.set_aspect('equal')
-    ax.scatter(projected_points[:, 0], projected_points[:, 1], s=1)
-    circle = plt.Circle((center_x, center_y), radius, fill=False)
-    ax.add_artist(circle)
-
-    edge = 0.01
+    ax.scatter(projected_points[:, 0], projected_points[:, 1], s=1, c='k')
+    # circle = plt.Circle((center_x, center_y), radius, fill=False)
+    
     plt.xlim(center_x-radius-edge, center_x+radius+edge)
     plt.ylim(center_y-radius-edge, center_y+radius+edge)
-    # plt.axis('equal')
-    plt.show()
-    return center_x, center_y, radius
 
+    if SAVE is not None:
+        plt.axis("off")
+        plt.savefig(SAVE, pad_inches=0, bbox_inches='tight', transparent=True)
+    plt.axis('on')
+
+    info = dict(center_x = center_x, center_y = center_y, radius = radius, edge = edge)
+    return ax,fig, info
 
 
 # %%
