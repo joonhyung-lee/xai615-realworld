@@ -171,6 +171,10 @@ for i in range(len(list2)):
 
 # %%
 from numpy import pi as PI
+from model.util import rpy2r, r2rpy, pr2t
+from demo_realworld_perception import get_center_position, Translation, Rotation_X, Rotation_Y, HT_matrix
+import numpy as np
+import math
 
 cature_q = np.array([-90, -90, 90, 90, 55, -90], dtype=np.float32) / 180 * PI
 env.forward(q=cature_q,joint_idxs=idxs_forward)
@@ -181,21 +185,10 @@ joint_names = env.rev_joint_names[:6]
 p_cam = env.get_p_body("camera_center") - env.get_p_body("base") + np.array([0, 0.01,0])
 
 R_world = env.get_R_body('camera_center')
-R_world
 
-
-# %%
-from model.util import rpy2r, r2rpy, pr2t
-from demo_realworld_perception import get_center_position, Translation, Rotation_X, Rotation_Y, HT_matrix
-import numpy as np
-import math
-
-# rpy = r2rpy(R_world)
-# R_cam = rpy2r([-rpy[0], PI/2 - rpy[1], PI-rpy[2]])
-
-rotation_x   = Rotation_X(-math.pi)
-rotation_y   = Rotation_Y(-math.pi/180*55)
-rotation_mat = np.dot(rotation_x, rotation_y)
+rotation_mat = np.eye(4)
+Transform_rel = rpy2r(np.array([0, -0.5, -0.5])*PI)
+rotation_mat[:3,:3] =  R_world @ Transform_rel
 
 robot = UR()
 
@@ -212,7 +205,37 @@ robot.execute_arm_speed(q_traj, speed_limit=0.2)
 robot.client.wait_for_result()
 
 # %%
+from demo_realworld_perception import run_camera, project_XY, project_YZ
+
 perception_path =  "/home/terry/Rilab/sOftrobot/UnseenObjectClustering"
+    
+    
+VIZ = True
+cleaned_point_cloud_list = run_camera(perception_path, camera_p = p_cam, rotation_mat=rotation_mat, clean_scale=3)
+
+# %%
+np.save("cleaned_point_cloud_list1.npy", cleaned_point_cloud_list[0].tolist())
+np.save("cleaned_point_cloud_list2.npy", cleaned_point_cloud_list[1].tolist())
+
+# %%
+
+
+
+# %%
+center_position_list = []
+radius_list = []
+for cleaned_point_cloud in cleaned_point_cloud_list:
+
+    center_z = project_YZ(cleaned_point_cloud, VIZ=VIZ)
+    center_x, center_y, radius = project_XY(cleaned_point_cloud, VIZ=VIZ)
+    center_position_array = np.array([center_y,center_x, center_z])
+    center_position_list.append(center_position_array)
+    radius_list.append(radius)
+
+
+
+# %%
+
 center_position_list, radius_list= get_center_position(perception_path, p_cam, rotation_mat, clean_scale = 3, VIZ=True)
 
 # number of objects
@@ -224,6 +247,9 @@ place_position_array = center_position_list[1-target_idx]
 
 pick_target = np.array([pick_position_array[0], pick_position_array[1], 0.04]) + env.get_p_body("base")
 place_target = np.array([place_position_array[0], place_position_array[1], 0.04]) + env.get_p_body("base")
+
+
+
 
 # %%
 # Solve IK
@@ -342,6 +368,8 @@ qs_array = np.array(qs)
 # Close viewers
 env.close_viewer()
 print ("Done.")
+
+
 
 
 # %%
