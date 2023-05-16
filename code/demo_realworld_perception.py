@@ -186,7 +186,7 @@ def project_XY(cleaned_point_cloud, edge = 0.01, SAVE=None):
 
     # project points onto the XY plane by ignoring the Z coordinate
     projected_points = cleaned_point_cloud[:, [1,0]]
-
+    np.random.shuffle(projected_points)
     # compute extent of points in XY plane
     min_x, min_y = np.min(projected_points, axis=0)
     max_x, max_y = np.max(projected_points, axis=0)
@@ -199,8 +199,8 @@ def project_XY(cleaned_point_cloud, edge = 0.01, SAVE=None):
     # plot the circle and points
     fig, ax = plt.subplots()
     ax.set_aspect('equal')
-    ax.scatter(projected_points[:, 0], projected_points[:, 1], s=1, c='k')
-    # circle = plt.Circle((center_x, center_y), radius, fill=False)
+    # ax.scatter(projected_points[:, 0], projected_points[:, 1], s=1, c='k')
+    ax.plot(projected_points[:, 0], projected_points[:, 1], c='k')
     
     plt.xlim(center_x-radius-edge, center_x+radius+edge)
     plt.ylim(center_y-radius-edge, center_y+radius+edge)

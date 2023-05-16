@@ -20,7 +20,7 @@ from sensor_msgs.msg import JointState
 import copy
 import numpy as np
 
-from numpy import pi as PI
+PI = 3.14
 DEG90 = PI/2
 
 class UR(object):
@@ -40,7 +40,7 @@ class UR(object):
         diff = np.linalg.norm(joint_pos2 - joint_pos1)
 
         
-        if diff > 1e-3:            
+        if diff > 5e-3:            
             raise Exception(f"Loose Connection, diff:{diff}")
         assert np.linalg.norm(joint_pos2) < 20
 
@@ -56,7 +56,7 @@ class UR(object):
                 return None
 
             init_point = JointTrajectoryPoint()
-            init_point.positions = joints_pos
+            init_point.positions = np.array(joints_pos)
             init_point.time_from_start = rospy.Duration.from_sec(0.0)
             init_point.velocities = [0 for _ in range(6)]
             g.trajectory.points.insert(0, copy.deepcopy(init_point))
@@ -78,12 +78,13 @@ class UR(object):
 
                 diff_q = q_after - q_before
                 diff_time = time_after - time_before
-
+                print(f"diff_q:{diff_q}")
+                print(f"diff_time:{diff_time}")
                 speed = np.linalg.norm(diff_q)/diff_time
                 print(speed)
                 if speed >= speed_limit:
-                    print(f"Speed is too fast: {speed} < {speed_limit}")
-                    return None
+                    raise Exception(f"Speed is too fast: {speed} < {speed_limit}")
+                    
 
             self.client.send_goal(g)
         except KeyboardInterrupt:
@@ -170,20 +171,31 @@ for i in range(len(list2)):
         
 
 # %%
-from numpy import pi as PI
+""" FOR ONROBOT RG2 """
+from pymodbus.client.sync import ModbusTcpClient
+""" FOR MODERN DRIVER """
+import roslib; roslib.load_manifest('ur_driver')
+import rospy
+import sys
+from model.gripper import openGrasp, closeGrasp, resetTool
+
+graspclient = ModbusTcpClient('192.168.0.22') 
+resetTool(graspclient)
+openGrasp(force=200, width=1000, graspclient=graspclient)
+time.sleep(1)
+
 from model.util import rpy2r, r2rpy, pr2t
 from demo_realworld_perception import get_center_position, Translation, Rotation_X, Rotation_Y, HT_matrix
 import numpy as np
 import math
 
-cature_q = np.array([-90, -90, 90, 90, 55, -90], dtype=np.float32) / 180 * PI
-env.forward(q=cature_q,joint_idxs=idxs_forward)
+capture_q = np.array([-90, -90, 90, 90, 70, -90], dtype=np.float32) / 180 * PI
+env.forward(q=capture_q,joint_idxs=idxs_forward)
 print(env.get_q(joint_idxs=idxs_jacobian))
 
 joint_names = env.rev_joint_names[:6]
 
-p_cam = env.get_p_body("camera_center") - env.get_p_body("base") + np.array([0, 0.01,0])
-
+p_cam = env.get_p_body("camera_center") - env.get_p_body("base") + np.array([-0.03, 0.03,0])
 R_world = env.get_R_body('camera_center')
 
 rotation_mat = np.eye(4)
@@ -192,37 +204,29 @@ rotation_mat[:3,:3] =  R_world @ Transform_rel
 
 robot = UR()
 
-q = copy.deepcopy(cature_q)
+q = copy.deepcopy(capture_q)
 q_traj = JointTrajectory()
 
 point = JointTrajectoryPoint()
 point.positions = q
 point.velocities = [0 for _ in range(6)]
-point.time_from_start = rospy.Duration.from_sec(20)
+point.time_from_start = rospy.Duration.from_sec(10)
 
 q_traj.points.append(point)
-robot.execute_arm_speed(q_traj, speed_limit=0.2)
+robot.execute_arm_speed(q_traj, speed_limit=1.0)
 robot.client.wait_for_result()
 
-# %%
+
 from demo_realworld_perception import run_camera, project_XY, project_YZ
 perception_path =  "/home/terry/Rilab/sOftrobot/UnseenObjectClustering"
-    
-    
+
 VIZ = True
 cleaned_point_cloud_list = run_camera(perception_path, camera_p = p_cam, rotation_mat=rotation_mat, clean_scale=3)
 
 # %%
-np.save("cleaned_point_cloud_list1.npy", cleaned_point_cloud_list[0].tolist())
-np.save("cleaned_point_cloud_list2.npy", cleaned_point_cloud_list[1].tolist())
-
-# %%
 edge = 0.01
-image_path = "XY.png"
-ax, fig, XY_info = project_XY(cleaned_point_cloud_list[0], edge, SAVE=image_path)
-plt.show()
 
-def detect_circle(image_path):
+def detect_hough(image_path):
     import cv2
     import numpy as np
 
@@ -230,81 +234,58 @@ def detect_circle(image_path):
     partial_image = cv2.imread(image_path, 0)
 
     # Apply Gaussian blur to reduce noise
-    blurred_image = cv2.GaussianBlur(partial_image, (5, 5), 0)
+    blurred_image = cv2.GaussianBlur(partial_image, (33,33), 250)
 
-    # Apply Canny edge detection
-    edges = cv2.Canny(blurred_image, 30, 100)
+    dp = 10.0  # Inverse ratio of the accumulator resolution to the image resolution (1 means same resolution)
+    min_dist = 500  # Minimum distance between the centers of the detected circles
+    param1 = 10  # Upper threshold for the internal Canny edge detector
+    param2 = 5  # Threshold for center detection (lower value for more circles)
+    min_radius = 70  # Minimum circle radius
+    max_radius = 140  # Maximum circle radius (0 for no limit)
 
-    # Find contours in the edge image
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    circles = cv2.HoughCircles(blurred_image, cv2.HOUGH_GRADIENT, dp, min_dist,
+                               param1=param1, param2=param2,
+                               minRadius=min_radius, maxRadius=max_radius)
 
-    # Initialize variables for circle detection using RANSAC
-    best_circle = None
-    max_inliers = 0
-    num_iterations = 1000
-    threshold_distance = 5  # Adjust this value based on the expected circle size
 
-    # Perform RANSAC iterations
-    for _ in range(num_iterations):
-        # Randomly select three points from the contours
-        random_points = np.random.choice(len(contours), 100, replace=False)
-        points = [contours[i][0] for i in random_points]
-
-        # Fit a circle using the selected points
-        (x, y), radius = cv2.minEnclosingCircle(np.array(points))
-        center = (int(x), int(y))
-        radius = int(radius)
-
-        # Count inliers (points within threshold distance to the circle)
-        inliers = sum(cv2.pointPolygonTest(contour, center, True) <= threshold_distance for contour in contours)
-
-        # Update the best circle if more inliers are found
-        if inliers > max_inliers:
-            max_inliers = inliers
-            best_circle = (center, radius)
-
-    # Draw the best circle on the original image
-    if best_circle is not None:
-        center, radius = best_circle
-        cv2.circle(partial_image, center, radius, (0, 255, 0), 2)
+    # Draw detected circles on the original image
+    if circles is not None:
+        circles = np.uint16(np.around(circles))
+        for circle in circles[0, :]:
+            center = (circle[0], circle[1])
+            radius = circle[2]
+            cv2.circle(blurred_image, center, radius, (0, 255, 0), 2)
+    else: print("No Circles!")
 
     # Display the result
-    plt.imshow(partial_image, cmap='gray')
+    plt.imshow(blurred_image, cmap='gray')
     return partial_image, center, radius
 
-partial_image, center_pixel, radius_pixel = detect_circle("XY.png")
-scale_rate = 2*(XY_info['radius']+XY_info['edge'])/partial_image.shape[0]
-
-center_x = center_pixel[0] * scale_rate + XY_info['center_x'] - (XY_info['radius']+edge)
-center_y = -center_pixel[1] * scale_rate + XY_info['center_y'] + (XY_info['radius']+edge)
-radius = radius_pixel * scale_rate
-
-project_XY(cleaned_point_cloud_list[0], edge=edge, SAVE=None)
-circle = plt.Circle((center_x, center_y), radius, fill=False)
-ax.add_artist(circle)
-plt.show()
-
-
-
-# %%
-# Fix the code below
+z_hard = 0.07
+edge = 0.02
 
 center_position_list = []
-radius_list = []
 for cleaned_point_cloud in cleaned_point_cloud_list:
+    image_path = "XY.png"
+    ax, fig, XY_info = project_XY(cleaned_point_cloud, edge, SAVE=image_path)
+    plt.show()
 
-    center_z = project_YZ(cleaned_point_cloud, VIZ=VIZ)
-    center_x, center_y, radius = project_XY(cleaned_point_cloud, VIZ=VIZ)
-    center_position_array = np.array([center_y,center_x, center_z])
-    center_position_list.append(center_position_array)
-    radius_list.append(radius)
+    partial_image, center_pixel, radius_pixel = detect_hough("XY.png")
+    scale_rate = 2*(XY_info['radius']+XY_info['edge'])/partial_image.shape[0]
 
+    center_x = center_pixel[0] * scale_rate + XY_info['center_x'] - (XY_info['radius']+edge)
+    center_y = -1 * center_pixel[1] * scale_rate + XY_info['center_y'] + (XY_info['radius']+edge)
+    radius = radius_pixel * scale_rate
+
+    ax, fig, XY_info = project_XY(cleaned_point_cloud, edge=edge, SAVE=None)
+    circle = plt.Circle((center_x, center_y), radius, fill=False, color='r', lw=5)
+    ax.add_artist(circle)
+    plt.show()
+
+    center_position_list.append(np.array([center_y, center_x, z_hard]))
 
 
 # %%
-
-center_position_list, radius_list= get_center_position(perception_path, p_cam, rotation_mat, clean_scale = 3, VIZ=True)
-
 # number of objects
 assert len(center_position_list) == 2
 
@@ -312,18 +293,16 @@ target_idx = np.argmin(np.stack(center_position_list)[:,1])
 pick_position_array = center_position_list[target_idx]
 place_position_array = center_position_list[1-target_idx]
 
-pick_target = np.array([pick_position_array[0], pick_position_array[1], 0.04]) + env.get_p_body("base")
-place_target = np.array([place_position_array[0], place_position_array[1], 0.04]) + env.get_p_body("base")
+pick_target = pick_position_array + env.get_p_body("base")
+place_target = place_position_array + env.get_p_body("base")
 
-
+pick_target, place_target
 
 
 # %%
 # Solve IK
-import math
-PI = math.pi
 
-err_th=1e-3
+err_th=5e-3
 
 
 joint_idx = np.asarray([ i for i in range(16,22)], 'int32')
@@ -333,8 +312,7 @@ env.update_viewer(azimuth=80,distance=2.5,elevation=-30,lookat=[0,0,1.5])
 env.update_viewer(VIS_TRANSPARENT=True) # transparent
 env.reset() # reset
 
-env.forward(q=cature_q,joint_idxs=idxs_forward)
-
+env.forward(q=capture_q,joint_idxs=idxs_forward)
 
 delta_p =  (env.get_p_body("tcp_link")-env.get_p_body('wrist_3_link'))
 R_ = env.get_R_body("wrist_3_link")
@@ -344,6 +322,8 @@ wrist3_target = pick_target - p_offset[[1,0,2]]
 
 # Set (multiple) IK targets
 ik_body_names = ['tcp_link','wrist_3_link']
+ik_p_trgts_0 = [pick_target+np.array([-0.1,0,0.03]),
+              wrist3_target+np.array([-0.1,0,0.03])]
 ik_p_trgts_1 = [pick_target+np.array([-0.1,0,0]),
               wrist3_target+np.array([-0.1,0,0])]
 ik_p_trgts_2 = [pick_target,
@@ -355,8 +335,11 @@ wrist3_target = place_target - p_offset[[1,0,2]]
 ik_p_trgts_4 = [place_target+np.array([0,0,0.25]),
               wrist3_target+np.array([0,0,0.25])]
 
-ik_p_trgts_5 = [place_target+np.array([0,0,0.22]),
-              wrist3_target+np.array([0,0,0.22])]
+ik_p_trgts_5 = [place_target+np.array([0,0,0.16]),
+              wrist3_target+np.array([0,0,0.16])]
+
+ik_p_trgts_6 = [place_target+np.array([0,0,0.14]),
+              wrist3_target+np.array([0,0,0.14])]
 
 
 
@@ -365,15 +348,15 @@ ik_R_trgts = [rpy2r(np.array([0, 1, -0.5])*PI ),
 IK_Ps = [True,True]
 IK_Rs = [True,False]
 
-ik_p_trgts_list = [ik_p_trgts_1, ik_p_trgts_2, ik_p_trgts_3, ik_p_trgts_4, ik_p_trgts_5]
-grasp_list = [None, 'close', None, None, 'open']
+ik_p_trgts_list = [ik_p_trgts_0, ik_p_trgts_1, ik_p_trgts_2, ik_p_trgts_3, ik_p_trgts_4, ik_p_trgts_5, ik_p_trgts_6]
+grasp_list = [None, None, None, 'close', None, None, None, 'open']
 
 # Loop
 q = env.get_q(joint_idxs=idxs_jacobian)
 
 # q = env.data.qpos[16:22]
-imgs,img_ticks,max_tick = [],[],1000
-qs = []
+imgs,img_ticks,max_tick = [],[],500
+qs = [capture_q]
 
 for ik_p_trgts in ik_p_trgts_list:
     while (env.tick < max_tick) and env.is_viewer_alive():
@@ -383,15 +366,15 @@ for ik_p_trgts in ik_p_trgts_list:
             p_trgt,R_trgt = ik_p_trgts[ik_idx],ik_R_trgts[ik_idx]
             IK_P,IK_R = IK_Ps[ik_idx],IK_Rs[ik_idx]
             J,err = env.get_ik_ingredients(
-                body_name=ik_body_name,p_trgt=p_trgt,R_trgt=R_trgt,IK_P=IK_P,IK_R=IK_R, w_weight=0.5)
+                body_name=ik_body_name,p_trgt=p_trgt,R_trgt=R_trgt,IK_P=IK_P,IK_R=IK_R, w_weight=1)
             if (J is None) and (err is None): continue
             if len(J_aug) == 0:
                 J_aug,err_aug = J,err
             else:
                 J_aug   = np.concatenate((J_aug,J),axis=0)
                 err_aug = np.concatenate((err_aug,err),axis=0)
-        dq = env.damped_ls(J_aug,err_aug,stepsize=1,eps=1e-1,th=5*np.pi/180.0)
-
+        dq = env.damped_ls(J_aug,err_aug,stepsize=1,eps=1e-2,th=5*np.pi/180.0)
+        # print(dq)
         err_norm = np.linalg.norm(err_aug)
         if err_norm < err_th:
             break
@@ -402,12 +385,13 @@ for ik_p_trgts in ik_p_trgts_list:
 
         p_contacts,f_contacts,geom1s,geom2s = env.get_contact_info(must_exclude_prefix="obj_")
 
-        geom1s_ = [obj_ for obj_ in geom1s if obj_ not in ["rg2_gripper_finger1_finger_tip_link","rg2_gripper_finger2_finger_tip_link"]]
-        geom2s_ = [obj_ for obj_ in geom2s if obj_ not in ["rg2_gripper_finger1_finger_tip_link","rg2_gripper_finger2_finger_tip_link"]]
+        geom1s_ = [obj_ for obj_ in geom1s if obj_ not in ["ur_rg2_gripper_finger1_finger_tip_link_collision","ur_rg2_gripper_finger2_finger_tip_link_collision"]]
+        geom2s_ = [obj_ for obj_ in geom2s if obj_ not in ["ur_rg2_gripper_finger1_finger_tip_link_collision","ur_rg2_gripper_finger2_finger_tip_link_collision"]]
 
-        # if len(geom1s_) > 0:
-        #     print(f"Collision with {geom1s_[0]} and {geom2s_[0]}")
-        #     break
+        if len(geom1s_) > 0:
+            print(f"Collision with {geom1s_[0]} and {geom2s_[0]}")
+            q = q - dq[idxs_jacobian] * 30
+            # break
 
         # Render
         for ik_idx,ik_body_name in enumerate(ik_body_names):
@@ -437,34 +421,29 @@ env.close_viewer()
 print ("Done.")
 
 
-
-
 # %%
-""" FOR ONROBOT RG2 """
-from pymodbus.client.sync import ModbusTcpClient
-""" FOR MODERN DRIVER """
-import roslib; roslib.load_manifest('ur_driver')
-import rospy
-import sys
-from model.gripper import openGrasp, closeGrasp
-
-graspclient = ModbusTcpClient('192.168.0.22') 
-
-# %%
-unit_time = 2
+unit_time_base = 1.0
 track_time = 0
 
-q_before = cature_q
-speed_limit = 0.5 # speed limit of joint velocity (Must be fixed to consider EE velocity instead)
+q_curr = rospy.wait_for_message("joint_states", JointState).position
+env.forward(q=q_curr,joint_idxs=idxs_forward)
+x_before = env.get_p_body("tcp_link")
 
+speed_limit = 0.15 # speed limit of joint velocity (Must be fixed to consider EE velocity instead)
+
+resetTool(graspclient)
 openGrasp(force=200, width=1000, graspclient=graspclient)
+time.sleep(1)
 
 for i, qs in enumerate(qs_array):    
     q_traj = JointTrajectory()
 
-    delta_q = np.linalg.norm(qs - q_before)
-    unit_time = max(delta_q/(speed_limit*0.9), unit_time)
-    
+    env.forward(q=qs,joint_idxs=idxs_forward)
+    x_curr = env.get_p_body("tcp_link")
+    delta_x = np.linalg.norm(x_curr - x_before)
+
+    unit_time = max(delta_x/(speed_limit), unit_time_base)
+    print(unit_time)
     track_time = track_time + unit_time
     point = JointTrajectoryPoint()
     point.positions = qs
@@ -472,10 +451,11 @@ for i, qs in enumerate(qs_array):
     point.time_from_start = rospy.Duration.from_sec(track_time)
     q_traj.points.append(point)
     
-    q_before = qs
+    x_before = x_curr
 
-    robot.execute_arm_speed(q_traj, speed_limit=speed_limit)
+    robot.execute_arm_speed(q_traj, speed_limit=1.6)
     robot.client.wait_for_result()
+    time.sleep(0.5)
 
     if grasp_list[i] is None:
         continue
@@ -489,9 +469,3 @@ for i, qs in enumerate(qs_array):
 
 
 # %%
-closeGrasp(force=200, width=100, graspclient=graspclient)
-
-
-
-# %%
-openGrasp(force=200, width=1000, graspclient=graspclient)
