@@ -66,6 +66,7 @@ class MuJoCoParserClass(object):
         self.pri_joint_maxs   = self.joint_ranges[self.pri_joint_idxs,1]
         self.pri_joint_ranges = self.pri_joint_maxs - self.pri_joint_mins
         self.n_pri_joint      = len(self.pri_joint_idxs)
+
         # Actuator
         self.n_ctrl           = self.model.nu # number of actuators (or controls)
         self.ctrl_names       = []
@@ -93,6 +94,13 @@ class MuJoCoParserClass(object):
         self.site_names       = [mujoco.mj_id2name(self.model,mujoco.mjtObj.mjOBJ_SITE,x)
                                 for x in range(self.n_site)]
 
+        self.idxs_forward = [self.model.joint(joint_name).qposadr[0] for joint_name in self.rev_joint_names[:6]]
+        self.idxs_jacobian = [self.model.joint(joint_name).dofadr[0] for joint_name in self.rev_joint_names[:6]]
+        list1, list2 = self.ctrl_joint_idxs, self.idxs_forward
+        self.idxs_step = []
+        for i in range(len(list2)):
+            if list2[i] in list1:
+                self.idxs_step.append(list1.index(list2[i]))
 
     def print_info(self):
         """
@@ -396,7 +404,7 @@ class MuJoCoParserClass(object):
         return q, err
     
     def solve_ik(self,body_name,p_trgt,R_trgt,IK_P,IK_R,q_init,idxs_forward, idxs_jacobian,
-                 RESET=False,DO_RENDER=False,render_every=1,th=1*np.pi/180.0,err_th=1e-6):
+                 RESET=False,DO_RENDER=False,render_every=1,th=1*np.pi/180.0,err_th=1e-6,w_weight=1.0):
         """
             Solve IK
         """
@@ -409,7 +417,7 @@ class MuJoCoParserClass(object):
         while True:
             tick = tick + 1
             J,err = self.get_ik_ingredients(
-                body_name=body_name,p_trgt=p_trgt,R_trgt=R_trgt,IK_P=IK_P,IK_R=IK_R)
+                body_name=body_name,p_trgt=p_trgt,R_trgt=R_trgt,IK_P=IK_P,IK_R=IK_R, w_weight=w_weight)
             dq = self.damped_ls(J,err,stepsize=1,eps=1e-1,th=th)
             q = q + dq[idxs_jacobian]
             self.forward(q=q,joint_idxs=idxs_forward)
@@ -965,7 +973,17 @@ class MuJoCoParserClass(object):
         if L > 1: L = 6
         qvel = self.data.qvel[addr:addr+L]
         return qvel
-    
+
+    def get_qacc_joint(self,joint_name):
+        """
+            Get joint velocity
+        """
+        addr = self.model.joint(joint_name).dofadr[0]
+        L = len(self.model.joint(joint_name).qpos0)
+        if L > 1: L = 6
+        qacc = self.data.qacc[addr:addr+L]
+        return qacc
+
     def viewer_pause(self):
         """
             Viewer pause

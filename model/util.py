@@ -24,6 +24,14 @@ def pr2t(p,R):
     ])
     return T
 
+def TransInv(T):
+    """
+        Inverts a homogeneous transformation matrix
+    """
+    p, R = t2pr(T)
+    Rt = np.array(R).T
+    return np.r_[np.c_[Rt, -np.dot(Rt, p)], [[0, 0, 0, 1]]]
+
 def t2pr(T):
     """
         T to p and R
@@ -45,6 +53,106 @@ def t2r(T):
     """   
     R = T[:3,:3]
     return R    
+
+def so3ToVec(so3mat):
+    """
+        Converts an so(3) representation to a 3-vector
+    """
+    return np.array([so3mat[2][1], so3mat[0][2], so3mat[1][0]])
+
+def VecToso3(omg):
+    """
+        Converts a 3-vector to an so(3) representation
+    """
+    return np.array([[0,      -omg[2],  omg[1]],
+                     [omg[2],       0, -omg[0]],
+                     [-omg[1], omg[0],       0]])
+def NearZero(z):
+    """
+        Determines whether a scalar is small enough to be treated as zero
+    """
+    return abs(z) < 1e-6
+
+def AxisAng3(expc3):
+    """
+        Converts a 3-vector of exponential coordinates for rotation into axis-angle form
+    """
+    return ((expc3 / np.linalg.norm(expc3)), np.linalg.norm(expc3))
+
+def MatrixLog3(R):
+    """
+        Computes the matrix logarithm of a rotation matrix
+    """
+    acosinput = (np.trace(R) - 1) / 2.0
+    if acosinput >= 1:
+        return np.zeros((3, 3))
+    elif acosinput <= -1:
+        if not NearZero(1 + R[2][2]):
+            omg = (1.0 / np.sqrt(2 * (1 + R[2][2]))) \
+                  * np.array([R[0][2], R[1][2], 1 + R[2][2]])
+        elif not NearZero(1 + R[1][1]):
+            omg = (1.0 / np.sqrt(2 * (1 + R[1][1]))) \
+                  * np.array([R[0][1], 1 + R[1][1], R[2][1]])
+        else:
+            omg = (1.0 / np.sqrt(2 * (1 + R[0][0]))) \
+                  * np.array([1 + R[0][0], R[1][0], R[2][0]])
+        return VecToso3(np.pi * omg)
+    else:
+        theta = np.arccos(acosinput)
+        return theta / 2.0 / np.sin(theta) * (R - np.array(R).T)
+
+def MatrixExp3(so3mat):
+    """
+        Computes the matrix exponential of a matrix in so(3)
+    """
+    omgtheta = so3ToVec(so3mat)
+    if NearZero(np.linalg.norm(omgtheta)):
+        return np.eye(3)
+    else:
+        theta = AxisAng3(omgtheta)[1]
+        omgmat = so3mat / theta
+        return np.eye(3) + np.sin(theta) * omgmat \
+               + (1 - np.cos(theta)) * np.dot(omgmat, omgmat)
+
+def MatrixExp6(se3mat):
+    """
+        Computes the matrix exponential of an se3 representation of
+    """
+    se3mat = np.array(se3mat)
+    omgtheta = so3ToVec(se3mat[0: 3, 0: 3])
+    if NearZero(np.linalg.norm(omgtheta)):
+        return np.r_[np.c_[np.eye(3), se3mat[0: 3, 3]], [[0, 0, 0, 1]]]
+    else:
+        theta = AxisAng3(omgtheta)[1]
+        omgmat = se3mat[0: 3, 0: 3] / theta
+        return np.r_[np.c_[MatrixExp3(se3mat[0: 3, 0: 3]),
+                           np.dot(np.eye(3) * theta \
+                                  + (1 - np.cos(theta)) * omgmat \
+                                  + (theta - np.sin(theta)) \
+                                    * np.dot(omgmat,omgmat),
+                                  se3mat[0: 3, 3]) / theta],
+                     [[0, 0, 0, 1]]]
+
+def MatrixLog6(T):
+    """
+        Computes the matrix logarithm of a homogeneous transformation matrix
+    """
+    p, R = t2p(T)
+    omgmat = MatrixLog3(R)
+    if np.array_equal(omgmat, np.zeros((3, 3))):
+        return np.r_[np.c_[np.zeros((3, 3)),
+                           [T[0][3], T[1][3], T[2][3]]],
+                     [[0, 0, 0, 0]]]
+    else:
+        theta = np.arccos((np.trace(R) - 1) / 2.0)
+        return np.r_[np.c_[omgmat,
+                           np.dot(np.eye(3) - omgmat / 2.0 \
+                           + (1.0 / theta - 1.0 / np.tan(theta / 2.0) / 2) \
+                              * np.dot(omgmat,omgmat) / theta,[T[0][3],
+                                                               T[1][3],
+                                                               T[2][3]])],
+                     [[0, 0, 0, 0]]]
+
 
 def rpy2r(rpy):
     """
