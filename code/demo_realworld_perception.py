@@ -5,8 +5,8 @@
 # ### Run the shell script of `UCN Network`
 
 # %%
-perception = "/home/terry/Rilab/sOftrobot/UnseenObjectClustering"
-
+# perception = "/home/terry/Rilab/sOftrobot/UnseenObjectClustering"
+perception = "/home/rilab-ur/UnseenObjectClustering"
 # %%
 CAPTURE = True
 
@@ -128,8 +128,6 @@ def cluster_info_2_cleaned_point_cloud(label_pixel, depth_pixel, transform_mat, 
             position=camera_to_base(transform_mat, np.array([[x,y,z]])).reshape(-1)
             clusters.append(position)
 
-        
-            
         single_cluster = np.stack(clusters)
         cluster_list.append(single_cluster)
     
@@ -215,7 +213,7 @@ def project_XY(cleaned_point_cloud, edge = 0.01, SAVE=None):
 
 
 # %%
-def run_camera(perception_path, camera_p, rotation_mat, clean_scale=3):
+def run_camera(perception_path, camera_p, rotation_mat, clean_scale=3, object_num=4):
     CAPTURE = True
 
     import subprocess
@@ -228,7 +226,7 @@ def run_camera(perception_path, camera_p, rotation_mat, clean_scale=3):
         if os.path.exists(f"{perception_path}/depth_data.npy"):
             os.remove(f"{perception_path}/depth_data.npy")
 
-        subprocess.run([f"cd {perception_path}; ./experiments/scripts/ros_seg_rgbd_add_test_segmentation_realsense.sh $GPU_ID 0"], shell=True)
+        subprocess.run([f"cd {perception_path}; ./experiments/scripts/ros_seg_rgbd_add_test_segmentation_realsense.sh 0 {object_num}"], shell=True)
     
     label_pixel = np.load(f'{perception}/label_data.npy')
     depth_pixel = np.load(f'{perception}/depth_data.npy') 
@@ -286,3 +284,5 @@ if __name__ == "__main__":
     # center_position_array, radius = get_center_position(perception, camera_p, rotation_mat, clean_scale = 3, VIZ=True)
 
 # %%
+# VIZ = True
+# cleaned_point_cloud_list = run_camera(perception, camera_p = p_cam, rotation_mat=rotation_mat, clean_scale=3)

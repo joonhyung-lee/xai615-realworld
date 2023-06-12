@@ -1,0 +1,18 @@
+Wed May 31 07:59:13 2023
+WARNING: mju_openResource: unknown file '/home/rilab-ur/RILAB/Perception/depth-cameras/xai615-realworld/asset/ur5e/scene_ur5e_rg2_obj.xml'
+
+Thu Jun  1 13:47:41 2023
+WARNING: mju_openResource: unknown file '/home/rilab-ur/RILAB/Perception/depth-cameras/xai615-realworld/asset/ur5e/scene_ur5e_rg2_obj.xml'
+
+Mon Jun  5 14:30:44 2023
+WARNING: mju_openResource: unknown file '/home/rilab-ur/RILAB/Perception/depth-cameras/xai615-realworld/asset/ur5e/scene_ur5e_rg2_obj.xml'
+
+Mon Jun  5 14:30:49 2023
+WARNING: mju_openResource: unknown file '/home/rilab-ur/RILAB/Perception/depth-cameras/xai615-realworld/asset/ur5e/scene_ur5e_rg2_obj.xml'
+
+Mon Jun  5 14:31:16 2023
+WARNING: mju_openResource: unknown file '/home/rilab-ur/RILAB/Perception/depth-cameras/xai615-realworld/code/asset/ur5e/scene_ur5e_rg2_obj.xml'
+
+Mon Jun  5 14:31:23 2023
+WARNING: mju_openResource: unknown file '/home/rilab-ur/RILAB/Perception/depth-cameras/xai615-realworld/asset/ur5e/scene_ur5e_rg2_obj.xml'
+

@@ -1,6 +1,6 @@
 # %%
 import sys 
-sys.path.append("..")
+sys.path.append("../../")
 import cv2 
 import numpy as np 
 import time
@@ -129,7 +129,7 @@ import mujoco
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
-sys.path.append("..")
+sys.path.append("../../")
 from model.mujoco_parser import MuJoCoParserClass
 from model.util import sample_xyzs,rpy2r,r2quat
 np.set_printoptions(precision=2,suppress=True,linewidth=100)
@@ -137,7 +137,7 @@ plt.rc('xtick',labelsize=6); plt.rc('ytick',labelsize=6)
 print ("MuJoCo version:[%s]"%(mujoco.__version__))
 
 # %%
-xml_path = '../asset/ur5e/scene_ur5e_rg2_obj.xml'
+xml_path = '../../asset/ur5e/scene_ur5e_rg2_obj.xml'
 env = MuJoCoParserClass(name='UR5e with RG2 gripper',rel_xml_path=xml_path,VERBOSE=True)
 obj_names = [body_name for body_name in env.body_names
              if body_name is not None and (body_name.startswith("obj_"))]
@@ -166,7 +166,7 @@ idxs_jacobian = [env.model.joint(joint_name).dofadr[0] for joint_name in env.joi
 list1, list2 = env.ctrl_joint_idxs, idxs_forward
 idxs_step = []
 for i in range(len(list2)):
-    if list2[i] not in list1:
+    if list2[i] in list1:
         idxs_step.append(list1.index(list2[i]))
         
 
@@ -180,9 +180,9 @@ import sys
 from model.gripper import openGrasp, closeGrasp, resetTool
 
 graspclient = ModbusTcpClient('192.168.0.22') 
-resetTool(graspclient)
-openGrasp(force=200, width=1000, graspclient=graspclient)
-time.sleep(1)
+# resetTool(graspclient)
+# openGrasp(force=200, width=1000, graspclient=graspclient)
+# time.sleep(1)
 
 from model.util import rpy2r, r2rpy, pr2t
 from demo_realworld_perception import get_center_position, Translation, Rotation_X, Rotation_Y, HT_matrix
@@ -216,9 +216,10 @@ q_traj.points.append(point)
 robot.execute_arm_speed(q_traj, speed_limit=1.0)
 robot.client.wait_for_result()
 
-
+#%%
 from demo_realworld_perception import run_camera, project_XY, project_YZ
-perception_path =  "/home/terry/Rilab/sOftrobot/UnseenObjectClustering"
+# perception_path =  "/home/terry/Rilab/sOftrobot/UnseenObjectClustering"
+perception_path = "/home/rilab-ur/UnseenObjectClustering"
 
 VIZ = True
 cleaned_point_cloud_list = run_camera(perception_path, camera_p = p_cam, rotation_mat=rotation_mat, clean_scale=3)
@@ -287,7 +288,7 @@ for cleaned_point_cloud in cleaned_point_cloud_list:
 
 # %%
 # number of objects
-assert len(center_position_list) == 2
+assert len(center_position_list) == 4
 
 target_idx = np.argmin(np.stack(center_position_list)[:,1])
 pick_position_array = center_position_list[target_idx]
